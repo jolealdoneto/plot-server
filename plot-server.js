@@ -1,7 +1,8 @@
-var common = require('./common.js');
+var common = require('./common.js'),
+    tado = require('./tado.js');
 
 // TODO: TEST
-(function(undefined) {
+(function(module, undefined) {
    function getAnchors(p1x, p1y, p2x, p2y, p3x, p3y) {
       var l1 = (p2x - p1x) / 2,
          l2 = (p3x - p2x) / 2,
@@ -204,6 +205,11 @@ var common = require('./common.js');
        notificationTextBoxStyle: {},
        notificationTextStyle: {}
    };
+   function createToDateFromResolution(fromDate, resolution) {
+      var result = fromDate.clone();
+      result.setHours(result.getHours() + resolution+1);
+      return result;
+   };
    function extend(a, b){
        for(var key in b) {
            if(b.hasOwnProperty(key)) {
@@ -231,12 +237,15 @@ var common = require('./common.js');
        ////////////
        function trunc(x) { return Math.floor(x*100)/100; };
    }
+   function dateToZulu(date) {
+       return date.toString('yyyy-MM-ddTHH:mm:ss.000')+'Z';
+   }
 
    function preprocessData(data, options) {
        var model = getDataFromModel(data),
-           plotData = preprocessPlotData(model);
+           plotData = preprocessPlotData(model.plotData),
+           resObj = {};
 
-       console.log(plotData);
 
        if (plotData != undefined) {
            // Predicates for line generating
@@ -253,7 +262,7 @@ var common = require('./common.js');
            var noConnectionPeakFilter = function (value) {
               for(var i = 0; i < model.noConnection.length; i++) {
                  var noConnectionEnd = model.noConnection[i].end;
-                 var noConnectionGap = noConnectionEnd + settings.noConnectionPeakTime;
+                 var noConnectionGap = noConnectionEnd + options.noConnectionPeakTime;
                  if(value.timestamp >= noConnectionEnd && value.timestamp < noConnectionGap) {
                     return false;
                  }
@@ -338,38 +347,40 @@ var common = require('./common.js');
                temperature = pushToAxis(temperature, tempJump, axisY);
            }
 
-           var resObj = {};
-           addLinesToPlot(resObj, 'temperature', temperatureLines, settings.temperatureCurveStyle, settings.outlineStyle);
-           addLinesToPlot(resObj, 'heating', heatingLines, settings.heatingOnStyle);
-           addLinesToPlot(resObj, 'sun', sunLines, settings.sunStyle, null, true);
-
-           return resObj;
+           resObj = { line: [], lineData: {}, fromTop: {} };
+           addLinesToPlot(resObj, 'temperature', temperatureLines/*, settings.temperatureCurveStyle, settings.outlineStyle*/);
+           addLinesToPlot(resObj, 'heating', heatingLines/*, settings.heatingOnStyle*/);
+           addLinesToPlot(resObj, 'sun', sunLines, /*settings.sunStyle, null,*/ true);
        }
+
+       resObj['minY'] = data.minInsideTemperature;
+       resObj['maxY'] = data.maxInsideTemperature;
+       resObj['minX'] = model.dataConstraints.minTimestamp;
+       resObj['maxX'] = model.dataConstraints.maxTimestamp;
+
+       return resObj;
 
        /////////////////////////
 
        // Add lines to plot
-       function addLinesToPlot(plot, name, lines, backgroundStyle, lineStyle, fromTop) {
+       function addLinesToPlot(plot, name, lines, /*backgroundStyle, lineStyle,*/ fromTop) {
           for (var i = 0; i < lines.length; i++) {
              var line = lines[i];
              if (line.length > 0) {
                 var lineName = name + i;
                 plot.line.push(lineName);
                 plot.lineData[lineName] = line;
-                plot.backgroundStyle[lineName] = backgroundStyle;
-                if (angular.isDefined(lineStyle) && lineStyle != null)
-                   plot.lineStyle[lineName] = lineStyle;
+                //plot.backgroundStyle[lineName] = backgroundStyle;
+                //if (angular.isDefined(lineStyle) && lineStyle != null)
+                //   plot.lineStyle[lineName] = lineStyle;
                 if (fromTop)
                    plot.fromTop[lineName] = fromTop;
              }
           }
        }
        function createToDate(fromDate) {
-          var result = fromDate.clone();
-          result.setHours(result.getHours() + options.resolution+1);
-          return result;
+          return createToDateFromResolution(fromDate, options.resolution);
        };
-
        // transform data simply into a more readable model
        function getDataFromModel(data) {
           var temp = {};
@@ -393,9 +404,9 @@ var common = require('./common.js');
              privacy: temp.privacy
           };
 
+
           if (modelValue == undefined ||
              modelValue.temperaturePlotData == undefined) {
-                 console.log("OUT");
              return null;
           }
 
@@ -504,13 +515,13 @@ var common = require('./common.js');
        var defaultOpt = {
            line : [],
            easing: 'C',
-           dataXScale: 0,
-           dataYScale: 0,
-           minX: 0,
-           minY: 0,
-           height: 0
+           height: 0,
+           width: 0
        };
        options = extend(defaultOpt, options);
+
+       options.dataXScale = options.width / (options.maxX - options.minX);
+       options.dataYScale = options.height / (options.maxY - options.minY);
 
        // set starting point and the very initial common path
        var line = options.line,
@@ -564,20 +575,50 @@ var common = require('./common.js');
        function scaleY(y) { return truncate(scalePointGivenY(y, options.minY, options.dataYScale, options.height)); }
    }
 
-   var opt = {};
-   opt.height = 515 - 101 + 42;
-   opt.minX = 1383519600000;
-   opt.minY = 19;
-   opt.dataXScale = 0.000009537037037037037;
-   opt.dataYScale = 62;
-   opt.line = [{"x":1383519600000,"y":21.193426},{"x":1383520143000,"y":21.302925},{"x":1383525423000,"y":21.47961},{"x":1383528783000,"y":21.61435},{"x":1383533223000,"y":21.431398},{"x":1383541140000,"y":21.431398},{"x":1383543663000,"y":21.606579},{"x":1383544200000,"y":21.606579},{"x":1383546000000,"y":21.606579},{"x":1383546303000,"y":21.709665},{"x":1383547800000,"y":21.709665},{"x":1383549183000,"y":21.823584},{"x":1383549600000,"y":21.823584},{"x":1383551340000,"y":21.823584},{"x":1383553140000,"y":21.823584},{"x":1383553743000,"y":22.001736},{"x":1383554940000,"y":22.001736},{"x":1383556740000,"y":22.001736},{"x":1383558540000,"y":22.001736},{"x":1383559262000,"y":22.195795},{"x":1383560340000,"y":22.195795},{"x":1383562623000,"y":22.317633}];
 
+   //var opt = {};
+   //opt.height = 515 - 101 + 42;
+   //opt.width = 960 - 126 - 10;
+   //var res = preprocessData(rawdata, { resolution: 24, width: opt.width, fromDate: common.normalizeDate("2013-11-10T23:00:00.000Z"), sunIntensityThreshold: 40, noConnectionPeakTime: (15 * 60 * 1000) });
+   //opt.minY = res.minY;
+   //opt.maxY = res.maxY;
+   //opt.minX = res.minX;
+   //opt.maxX = res.maxX;
 
-   console.log(mainTemperatureCurve(opt));
-
-
-   var rawdata = {"success":true,"minInsideTemperature":19.56964,"maxInsideTemperature":24.56964,"plotdata":[{"timestamp":"2013-11-03T23:00:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.193426,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-03T23:09:03.259Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.302925,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T00:37:03.135Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.47961,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T01:33:03.238Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.61435,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T02:47:03.145Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.431398,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T04:59:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.431398,"virtSolarIntensity":1,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T05:41:03.243Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.606579,"virtSolarIntensity":1,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T05:50:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.606579,"virtSolarIntensity":0,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T06:20:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.606579,"virtSolarIntensity":21,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T06:25:03.402Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.709665,"virtSolarIntensity":21,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T06:50:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.709665,"virtSolarIntensity":35,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T07:13:03.611Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.823584,"virtSolarIntensity":35,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T07:20:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.823584,"virtSolarIntensity":47,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T07:49:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.823584,"virtSolarIntensity":59,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T08:19:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":21.823584,"virtSolarIntensity":69,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T08:29:03.425Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.001736,"virtSolarIntensity":69,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T08:49:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.001736,"virtSolarIntensity":77,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T09:19:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.001736,"virtSolarIntensity":83,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T09:49:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.001736,"virtSolarIntensity":89,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T10:01:02.807Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.195795,"virtSolarIntensity":89,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T10:19:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.195795,"virtSolarIntensity":90,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T10:49:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.195795,"virtSolarIntensity":89,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T10:57:03.349Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":89,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T11:18:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":87,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T11:48:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":79,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T12:18:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":76,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T12:50:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":67,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T13:20:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.317633,"virtSolarIntensity":56,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T13:33:03.508Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.439396,"virtSolarIntensity":56,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T13:50:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.439396,"virtSolarIntensity":38,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T14:17:03.543Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.338581,"virtSolarIntensity":38,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T14:20:00.000Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.338581,"virtSolarIntensity":31,"thermostatOperation":"NO_FREEZE"},{"timestamp":"2013-11-04T15:01:03.500Z","rxControlPhase":"UNDEFINED","heatingOn":false,"insideTemperature":22.241882,"virtSolarIntensity":31,"thermostatOperation":"NO_FREEZE"}],"dayStatistics":{"2013-11-04":{"day":1383519600000,"SLEEP":0,"HOME":0,"AWAY":0,"MANUAL":0,"NO_FREEZE":58016898,"UNDEFINED":0,"NO_INTERNET":0},"2013-11-05":{"day":1383606000000,"SLEEP":0,"HOME":0,"AWAY":0,"MANUAL":0,"NO_FREEZE":-28383102,"UNDEFINED":0,"NO_INTERNET":0}},"noConnection":[],"privacy":[]};
-
-   console.log(preprocessData(rawdata, { resolution: 24, width: 500, fromDate: common.normalizeDate("2013-11-03T23:00:00.000Z"), sunIntensityThreshold: 40 }));
-
-})();
+   //opt.line = res.lineData['temperature0'];
+   //console.log(mainTemperatureCurve(opt));
+   //
+   //
+   module.exports = {
+       /*
+        * Params:
+        *   height
+        *   width
+        *   resolution
+        *   fromDate (zulu)
+        *   username
+        *   password
+        * */
+       getCurve: function(params) {
+           // get toDate from resolution
+           var fromDate = common.normalizeDate(params.fromDate),
+               toDate = createToDateFromResolution(fromDate, 24);
+           return tado.getTemperaturePlotData(params.fromDate, dateToZulu(toDate), params.username, params.password)
+           // Preprocess it before with the right data
+           .then(function(rawdata) {
+               console.log('raw data returned');
+               var opt = {
+                   height: params.height,
+                   width: params.width,
+               };
+               var res = preprocessData(rawdata, { resolution: 24, width: params.width, fromDate: common.normalizeDate(params.fromDate), sunIntensityThreshold: 40, noConnectionPeakTime: (15 * 60 * 1000) });
+               opt.minY = res.minY;
+               opt.maxY = res.maxY;
+               opt.minX = res.minX;
+               opt.maxX = res.maxX;
+               opt.line = res.lineData['temperature0'];
+               return mainTemperatureCurve(opt);
+           });
+       }
+   };
+})(module);

@@ -51,6 +51,7 @@ function convertDateToHome(date, format) {
    return datetz.toString(format);
 }
 
+
 module.exports = {
     normalizeDate: normalizeDate,
     convertGivenDateToHome: convertGivenDateToHome,
