@@ -8,6 +8,7 @@ var common = require('./common.js'),
          l2 = (p3x - p2x) / 2,
          a = Math.atan((p2x - p1x) / Math.abs(p2y - p1y)),
          b = Math.atan((p3x - p2x) / Math.abs(p2y - p3y));
+      console.log(p2x);
       a = p1y < p2y ? Math.PI - a : a;
       b = p3y < p2y ? Math.PI - b : b;
       var alpha = Math.PI / 2 - ((a + b) % (Math.PI * 2)) / 2,
@@ -207,7 +208,8 @@ var common = require('./common.js'),
    };
    function createToDateFromResolution(fromDate, resolution) {
       var result = fromDate.clone();
-      result.setHours(result.getHours() + resolution+1);
+      result.setHours(result.getHours() + resolution);
+      console.log(result);
       return result;
    };
    function extend(a, b){
@@ -347,14 +349,14 @@ var common = require('./common.js'),
                temperature = pushToAxis(temperature, tempJump, axisY);
            }
 
-           resObj = { line: [], lineData: {}, fromTop: {} };
+           resObj = { line: [], lineData: {}, fromTop: {}, axisY: axisY, axisX: axisX };
            addLinesToPlot(resObj, 'temperature', temperatureLines/*, settings.temperatureCurveStyle, settings.outlineStyle*/);
            addLinesToPlot(resObj, 'heating', heatingLines/*, settings.heatingOnStyle*/);
            addLinesToPlot(resObj, 'sun', sunLines, /*settings.sunStyle, null,*/ true);
        }
 
-       resObj['minY'] = data.minInsideTemperature;
-       resObj['maxY'] = data.maxInsideTemperature;
+       resObj['minY'] = model.dataConstraints.minInsideTemperature;
+       resObj['maxY'] = model.dataConstraints.maxInsideTemperature;
        resObj['minX'] = model.dataConstraints.minTimestamp;
        resObj['maxX'] = model.dataConstraints.maxTimestamp;
 
@@ -421,12 +423,14 @@ var common = require('./common.js'),
           };
 
           var privacy = [];
-          for (var i = 0; modelValue.privacy.length; i++) {
+          for (var i = 0; i < modelValue.privacy.length; i++) {
              var value = modelValue.privacy[i];
-             privacy.push({
-                start: common.normalizeDate(value.start).getTime(),
-                end: common.normalizeDate(value.end).getTime()
-             });
+             if (value != null) {
+                 privacy.push({
+                    start: common.normalizeDate(value.start).getTime(),
+                    end: common.normalizeDate(value.end).getTime()
+                 });
+             }
           };
 
           return {
@@ -505,7 +509,7 @@ var common = require('./common.js'),
 
 
    function scalePointGivenX(x, minX, dataXScale) {
-       return 126 + (x - minX) * dataXScale;
+       return (x - minX) * dataXScale;
    }
    function scalePointGivenY(y, minY, dataYScale, height) {
        return Math.floor(height - (y - minY) * dataYScale);
@@ -603,21 +607,26 @@ var common = require('./common.js'),
            // get toDate from resolution
            var fromDate = common.normalizeDate(params.fromDate),
                toDate = createToDateFromResolution(fromDate, 24);
-           return tado.getTemperaturePlotData(params.fromDate, dateToZulu(toDate), params.username, params.password)
+           return tado.getTemperaturePlotData(fromDate.toISOString(), toDate.toISOString(), params.username, params.password)
            // Preprocess it before with the right data
            .then(function(rawdata) {
-               console.log('raw data returned');
                var opt = {
                    height: params.height,
                    width: params.width,
                };
+               console.log(opt);
                var res = preprocessData(rawdata, { resolution: 24, width: params.width, fromDate: common.normalizeDate(params.fromDate), sunIntensityThreshold: 40, noConnectionPeakTime: (15 * 60 * 1000) });
                opt.minY = res.minY;
                opt.maxY = res.maxY;
                opt.minX = res.minX;
                opt.maxX = res.maxX;
-               opt.line = res.lineData['temperature0'];
-               return mainTemperatureCurve(opt);
+
+               for (var i = 0; i < res.line.length; i++) {
+                   opt.line = res.lineData[res.line[i]];
+                   res.lineData[res.line[i]] = mainTemperatureCurve(opt);
+               }
+
+               return res;
            });
        }
    };
